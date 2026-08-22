@@ -11,3 +11,31 @@
 3. **Observabilidade Total & Rastreabilidade:** Cada execução conta com `requestId` UUIDv4 emitido na resposta e headers HTTP `x-request-id`.
 4. **Resiliência e Proteção:** Rate limiting nativo em memória e validação estrita de URLs de entrada.
 5. **Segurança Rigorosa:** Chaves e tokens (`APIFY_TOKEN`, `SHOPEE_SCRAPER_TOKEN`) nunca são salvos em versionamento ou expostos em logs/responses.
+
+## E2E Baseline
+
+```text
+PHASE=2F.16
+STATUS=E2E_VALIDATED
+
+Shopee scraping owner:
+pub-shopee-scraper
+
+ECOM role:
+HTTP adapter / consumer
+
+Primary provider:
+Apify
+
+Fallback:
+Cloudflare Browser Run
+
+Shop test:
+9r18ht6m88
+
+ShopID:
+1729928484
+
+Products validated:
+>=3
+```
