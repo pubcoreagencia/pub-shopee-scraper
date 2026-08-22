@@ -1,6 +1,5 @@
-﻿import { acquire, connect } from "@cloudflare/playwright";
-import { IShopeeProvider, ShopeeProviderResult } from "../IShopeeProvider";
-import { ShopeeErrorCode, ShopeeScraperError, ShopeeScrapeRequest } from "../../types";
+﻿import { IShopeeProvider, ShopeeProviderResult } from "../IShopeeProvider";
+import { ShopeeErrorCode, ShopeeScraperError, ValidatedScrapeRequest } from "../../types";
 import { extractFriendlyUsername, extractShopId, normalizeBrowserItem } from "../../normalizers/shopeeProductNormalizer";
 
 export class CloudflareShopeeProvider implements IShopeeProvider {
@@ -11,7 +10,7 @@ export class CloudflareShopeeProvider implements IShopeeProvider {
     this.browserBinding = browserBinding;
   }
 
-  async fetchCatalog(req: ShopeeScrapeRequest): Promise<ShopeeProviderResult> {
+  async fetchCatalog(req: ValidatedScrapeRequest): Promise<ShopeeProviderResult> {
     const startedAt = Date.now();
 
     if (!this.browserBinding) {
@@ -40,6 +39,7 @@ export class CloudflareShopeeProvider implements IShopeeProvider {
     let page: any;
 
     try {
+      const { acquire, connect } = await import("@cloudflare/playwright");
       const { sessionId } = await acquire(this.browserBinding);
       browser = await connect(this.browserBinding, sessionId);
       context = await browser.newContext();

@@ -1,4 +1,4 @@
-﻿import { ShopeeProduct, ShopeeScrapeRequest, ShopeeShop } from "../types";
+﻿import { ShopeeProduct, ShopeeShop, ValidatedScrapeRequest } from "../types";
 
 export interface ShopeeProviderResult {
   provider: "apify" | "cloudflare-browser-run";
@@ -11,5 +11,5 @@ export interface ShopeeProviderResult {
 
 export interface IShopeeProvider {
   readonly name: "apify" | "cloudflare-browser-run";
-  fetchCatalog(req: ShopeeScrapeRequest): Promise<ShopeeProviderResult>;
+  fetchCatalog(req: ValidatedScrapeRequest): Promise<ShopeeProviderResult>;
 }

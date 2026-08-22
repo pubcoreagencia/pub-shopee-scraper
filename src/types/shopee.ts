@@ -1,4 +1,6 @@
-﻿export interface ShopeeShop {
+﻿import { ShopeeErrorCode } from "./errors";
+
+export interface ShopeeShop {
   shopId: string | null;
   username: string | null;
   name: string | null;
@@ -27,10 +29,19 @@ export interface ShopeeScrapeRequest {
   limit?: number;
 }
 
+export interface ValidatedScrapeRequest {
+  shopUrl?: string;
+  shopUsername?: string;
+  shopId?: string;
+  country: "br";
+  limit: number;
+}
+
 export interface ShopeeScrapeMetadata {
   provider: string;
   productsFound: number;
   executionTimeMs: number;
+  requestId: string;
   costUsd?: number | null;
   fallbackUsed?: boolean;
   apifyError?: string | null;
@@ -40,6 +51,7 @@ export interface ShopeeScrapeMetadata {
 
 export interface ShopeeScrapeResult {
   success: boolean;
+  requestId: string;
   provider: "apify" | "cloudflare-browser-run" | "none";
   shop: ShopeeShop;
   products: ShopeeProduct[];

@@ -1,6 +1,8 @@
 ﻿# PUB Shopee Scraper
 
-Serviço independente e de alto desempenho para ingestão de catálogos de lojas públicas da Shopee Brasil, desenvolvido para a holding **PUB REC HOLDING**.
+Serviço independente e de alto desempenho para ingestão de catálogos de lojas públicas da Shopee Brasil, desenvolvido para a **PUB REC HOLDING**.
+
+---
 
 ## 🚀 Arquitetura & Providers
 
@@ -8,6 +10,8 @@ O serviço opera com uma arquitetura multi-provider com roteamento e fallback au
 
 1. **Primary Provider — Apify (`xtracto~shopee-shop-scraper`):** Ingestão rápida e confiável via API especializada de catálogo sem necessidade de proxy local ou credenciais de conta Shopee.
 2. **Fallback Provider — Cloudflare Browser Run (@cloudflare/playwright):** Resolução nativa de friendly URLs via network listener (`/api/v4/shop/get_shop_base_v2` -> `ShopID`) executada diretamente no Cloudflare Workers.
+
+---
 
 ## 📦 Contrato da API
 
@@ -18,7 +22,8 @@ GET /health
 ```json
 {
   "ok": true,
-  "service": "pub-shopee-scraper"
+  "service": "pub-shopee-scraper",
+  "requestId": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
@@ -42,6 +47,7 @@ Content-Type: application/json
 ```json
 {
   "success": true,
+  "requestId": "550e8400-e29b-41d4-a716-446655440000",
   "provider": "apify",
   "shop": {
     "shopId": "1729928484",
@@ -69,11 +75,28 @@ Content-Type: application/json
     "productsFound": 1,
     "executionTimeMs": 8120,
     "costUsd": 0.04,
-    "fallbackUsed": false
+    "fallbackUsed": false,
+    "requestId": "550e8400-e29b-41d4-a716-446655440000"
   },
   "errors": []
 }
 ```
+
+---
+
+## 🛡️ Erros Estruturados (`ShopeeErrorCode`)
+
+- `SHOPEE_INVALID_URL` — URL malformada, protocolo inválido ou fora do domínio Shopee Brasil.
+- `SHOPEE_SHOP_NOT_FOUND` — Loja inexistente ou ShopID não encontrado.
+- `SHOPEE_PROVIDER_UNAVAILABLE` — Provider temporariamente indisponível.
+- `SHOPEE_PROVIDER_AUTH_ERROR` — Falha de autenticação ou token ausente/inválido.
+- `SHOPEE_RATE_LIMIT` — Limite de requisições por minuto excedido (HTTP 429).
+- `SHOPEE_EMPTY_CATALOG` — Loja encontrada mas sem anúncios ativos no catálogo.
+- `SHOPEE_ANTIFRAUD` — Desafio de antifraude ou login wall detectado.
+- `SHOPEE_INVALID_RESPONSE` — Payload de resposta malformado ou inválido.
+- `SHOPEE_TIMEOUT` — Tempo limite de requisição excedido.
+
+---
 
 ## 🛠️ Comandos
 
@@ -81,10 +104,13 @@ Content-Type: application/json
 # Instalar dependências
 npm install
 
+# Executar testes unitários (completamente isolados, sem chamadas externas)
+npm test
+
 # Validar tipagem TypeScript
 npm run typecheck
 
-# Validar build (dry-run)
+# Validar build do Worker
 npm run build
 
 # Deploy no Cloudflare Workers

@@ -1,7 +1,7 @@
 ﻿import { IShopeeProvider } from "./IShopeeProvider";
 import { ApifyShopeeProvider } from "./apify/ApifyShopeeProvider";
 import { CloudflareShopeeProvider } from "./browser/CloudflareShopeeProvider";
-import { Env, ShopeeErrorCode, ShopeeScraperError, ShopeeScrapeRequest, ShopeeScrapeResult } from "../types";
+import { Env, ShopeeErrorCode, ShopeeScraperError, ShopeeScrapeResult, ValidatedScrapeRequest } from "../types";
 import { extractFriendlyUsername, extractShopId } from "../normalizers/shopeeProductNormalizer";
 
 export class ShopeeProviderRouter {
@@ -17,7 +17,7 @@ export class ShopeeProviderRouter {
     }
   }
 
-  async scrape(req: ShopeeScrapeRequest): Promise<ShopeeScrapeResult> {
+  async scrape(req: ValidatedScrapeRequest, requestId: string): Promise<ShopeeScrapeResult> {
     const startedAt = Date.now();
     const errors: string[] = [];
 
@@ -25,7 +25,7 @@ export class ShopeeProviderRouter {
     const shopUsername = req.shopUsername || (shopUrl ? extractFriendlyUsername(shopUrl) : null);
     const shopId = req.shopId || (shopUrl ? extractShopId(shopUrl) : null);
 
-    let resolvedShop = {
+    const resolvedShop = {
       shopId: shopId ?? null,
       username: shopUsername ?? null,
       name: null as string | null,
@@ -38,14 +38,22 @@ export class ShopeeProviderRouter {
     if (this.apifyProvider) {
       try {
         const apifyResult = await this.apifyProvider.fetchCatalog(req);
+        const shop = {
+          shopId: apifyResult.shop.shopId || resolvedShop.shopId,
+          username: apifyResult.shop.username || resolvedShop.username,
+          name: apifyResult.shop.name || resolvedShop.name,
+        };
+
+        const resultErrors: string[] = [];
+        if (apifyResult.products.length === 0) {
+          resultErrors.push(`[${ShopeeErrorCode.EMPTY_CATALOG}] No active products found in the shop catalog`);
+        }
+
         return {
           success: true,
+          requestId,
           provider: "apify",
-          shop: {
-            shopId: apifyResult.shop.shopId || resolvedShop.shopId,
-            username: apifyResult.shop.username || resolvedShop.username,
-            name: apifyResult.shop.name || resolvedShop.name,
-          },
+          shop,
           products: apifyResult.products,
           metadata: {
             provider: "apify",
@@ -53,15 +61,35 @@ export class ShopeeProviderRouter {
             executionTimeMs: apifyResult.executionTimeMs,
             costUsd: apifyResult.costUsd ?? null,
             fallbackUsed: false,
+            requestId,
           },
-          errors: [],
+          errors: resultErrors,
         };
       } catch (err) {
+        if (err instanceof ShopeeScraperError && err.code === ShopeeErrorCode.INVALID_URL) {
+          // Client error: do not attempt fallback
+          return {
+            success: false,
+            requestId,
+            provider: "none",
+            shop: resolvedShop,
+            products: [],
+            metadata: {
+              provider: "none",
+              productsFound: 0,
+              executionTimeMs: Date.now() - startedAt,
+              fallbackUsed: false,
+              requestId,
+            },
+            errors: [err.message],
+          };
+        }
+
         apifyError = err instanceof Error ? err.message : String(err);
         errors.push(`[Apify Provider] ${apifyError}`);
       }
     } else {
-      apifyError = "APIFY_TOKEN is not configured";
+      apifyError = "APIFY_TOKEN is not configured in environment";
       errors.push(`[Apify Provider] ${apifyError}`);
     }
 
@@ -69,14 +97,22 @@ export class ShopeeProviderRouter {
     if (this.browserProvider) {
       try {
         const browserResult = await this.browserProvider.fetchCatalog(req);
+        const shop = {
+          shopId: browserResult.shop.shopId || resolvedShop.shopId,
+          username: browserResult.shop.username || resolvedShop.username,
+          name: browserResult.shop.name || resolvedShop.name,
+        };
+
+        const resultErrors: string[] = [...errors];
+        if (browserResult.products.length === 0) {
+          resultErrors.push(`[${ShopeeErrorCode.EMPTY_CATALOG}] No active products found via browser search`);
+        }
+
         return {
           success: true,
+          requestId,
           provider: "cloudflare-browser-run",
-          shop: {
-            shopId: browserResult.shop.shopId || resolvedShop.shopId,
-            username: browserResult.shop.username || resolvedShop.username,
-            name: browserResult.shop.name || resolvedShop.name,
-          },
+          shop,
           products: browserResult.products,
           metadata: {
             provider: "cloudflare-browser-run",
@@ -84,9 +120,10 @@ export class ShopeeProviderRouter {
             executionTimeMs: browserResult.executionTimeMs,
             fallbackUsed: true,
             apifyError,
+            requestId,
             ...browserResult.metadata,
           },
-          errors,
+          errors: resultErrors,
         };
       } catch (err) {
         browserError = err instanceof Error ? err.message : String(err);
@@ -100,6 +137,7 @@ export class ShopeeProviderRouter {
     // 3. All providers exhausted
     return {
       success: false,
+      requestId,
       provider: "none",
       shop: resolvedShop,
       products: [],
@@ -110,6 +148,7 @@ export class ShopeeProviderRouter {
         fallbackUsed: true,
         apifyError,
         browserError,
+        requestId,
       },
       errors,
     };

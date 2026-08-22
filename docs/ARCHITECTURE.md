@@ -8,11 +8,15 @@
           ▼
    POST /v1/scrape/shop
           │
+          ├──► Rate Limiter Check (60 req/min)
+          │
+          ├──► Request Validation (Domain / Limit / Identifiers)
+          │
           ▼
- [ ShopeeProviderRouter ]
+ [ ShopeeProviderRouter ] (Associa requestId)
           │
           ├──► (1) ApifyShopeeProvider ──► Apify Actor (xtracto~shopee-shop-scraper) ──► ShopeeProduct[]
-          │             │ (on error/missing token)
+          │             │ (on failure / auth / timeout)
           │             ▼
           └──► (2) CloudflareShopeeProvider ──► Browser Run (page.on("response")) ──► ShopeeProduct[]
 ```

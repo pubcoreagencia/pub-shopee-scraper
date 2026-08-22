@@ -1,12 +1,24 @@
-﻿async function testNewProduct() {
-  const baseUrl = "https://pub-shopee-scraper.contato-pubcore.workers.dev";
-  const token = "pub_shopee_scraper_token_2026";
+﻿/**
+ * Live test script for PUB Shopee Scraper.
+ * Requires SHOPEE_SCRAPER_TOKEN environment variable.
+ * Usage:
+ *   $env:SHOPEE_SCRAPER_TOKEN="<token>"; node tests/live_test.cjs
+ */
+async function testNewProduct() {
+  const baseUrl = process.env.SHOPEE_SCRAPER_URL || "https://pub-shopee-scraper.contato-pubcore.workers.dev";
+  const token = process.env.SHOPEE_SCRAPER_TOKEN;
 
   console.log("=== 1. TEST GET /health ===");
   const healthRes = await fetch(`${baseUrl}/health`);
   console.log(`Health Status: ${healthRes.status}`);
   const healthData = await healthRes.json();
   console.log("Health Data:", JSON.stringify(healthData));
+
+  if (!token) {
+    console.log("\n[INFO] SHOPEE_SCRAPER_TOKEN not provided in environment. Skipping authenticated scrape test.");
+    console.log("To run authenticated test: set SHOPEE_SCRAPER_TOKEN in environment.");
+    return;
+  }
 
   console.log("\n=== 2. TEST POST /v1/scrape/shop (limit: 3) ===");
   const start = Date.now();

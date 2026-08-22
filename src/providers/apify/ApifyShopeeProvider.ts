@@ -1,5 +1,5 @@
 ﻿import { IShopeeProvider, ShopeeProviderResult } from "../IShopeeProvider";
-import { ShopeeErrorCode, ShopeeScraperError, ShopeeScrapeRequest } from "../../types";
+import { ShopeeErrorCode, ShopeeScraperError, ValidatedScrapeRequest } from "../../types";
 import { extractFriendlyUsername, extractShopId, normalizeApifyItem } from "../../normalizers/shopeeProductNormalizer";
 
 export class ApifyShopeeProvider implements IShopeeProvider {
@@ -10,21 +10,13 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     this.token = token;
   }
 
-  async fetchCatalog(req: ShopeeScrapeRequest): Promise<ShopeeProviderResult> {
+  async fetchCatalog(req: ValidatedScrapeRequest): Promise<ShopeeProviderResult> {
     const startedAt = Date.now();
 
     if (!this.token || !this.token.trim()) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.PROVIDER_AUTH_ERROR,
         "APIFY_TOKEN is missing or not configured in environment"
-      );
-    }
-
-    const target = req.shopUsername || req.shopUrl || req.shopId;
-    if (!target) {
-      throw new ShopeeScraperError(
-        ShopeeErrorCode.INVALID_URL,
-        "Neither shopUrl, shopUsername, nor shopId was provided"
       );
     }
 
@@ -35,13 +27,16 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     const body = {
       shop: shopTarget,
       country: req.country || "br",
-      maxProducts: req.limit || 100,
+      maxProducts: req.limit || 30,
       fetchDetail: false,
       delay: 1,
     };
 
     let runRes: Response;
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 120_000);
+
       runRes = await fetch(`https://api.apify.com/v2/acts/${actorId}/runs?waitForFinish=120`, {
         method: "POST",
         headers: {
@@ -49,18 +44,21 @@ export class ApifyShopeeProvider implements IShopeeProvider {
           authorization: `Bearer ${this.token}`,
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
     } catch (err) {
+      const isAbort = err instanceof Error && err.name === "AbortError";
       throw new ShopeeScraperError(
         ShopeeErrorCode.TIMEOUT,
-        `Network error initiating Apify Actor run: ${err instanceof Error ? err.message : String(err)}`
+        isAbort ? "Apify Actor run timed out after 120 seconds" : `Network error connecting to Apify: ${err instanceof Error ? err.message : String(err)}`
       );
     }
 
     if (runRes.status === 401 || runRes.status === 403) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.PROVIDER_AUTH_ERROR,
-        `Invalid or unauthorized APIFY_TOKEN (HTTP ${runRes.status})`
+        `Apify authentication failed (HTTP ${runRes.status})`
       );
     }
 
@@ -72,10 +70,9 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     }
 
     if (!runRes.ok) {
-      const errText = await runRes.text().catch(() => "");
       throw new ShopeeScraperError(
         ShopeeErrorCode.PROVIDER_UNAVAILABLE,
-        `Apify actor start returned HTTP ${runRes.status}: ${errText.slice(0, 200)}`
+        `Apify actor execution returned HTTP ${runRes.status}`
       );
     }
 
@@ -93,7 +90,7 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     if (status !== "SUCCEEDED") {
       throw new ShopeeScraperError(
         ShopeeErrorCode.PROVIDER_UNAVAILABLE,
-        `Apify Actor run finished with status ${status}`
+        `Apify Actor finished with non-success status: ${status}`
       );
     }
 
@@ -101,7 +98,7 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     if (!datasetId) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.INVALID_RESPONSE,
-        "No defaultDatasetId found in Apify run response"
+        "No defaultDatasetId returned by Apify"
       );
     }
 
@@ -117,14 +114,14 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     } catch (err) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.TIMEOUT,
-        `Failed to fetch dataset items: ${err instanceof Error ? err.message : String(err)}`
+        `Failed to fetch dataset items from Apify: ${err instanceof Error ? err.message : String(err)}`
       );
     }
 
     if (!datasetRes.ok) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.INVALID_RESPONSE,
-        `Fetch dataset items returned HTTP ${datasetRes.status}`
+        `Apify dataset items fetch returned HTTP ${datasetRes.status}`
       );
     }
 
@@ -134,14 +131,14 @@ export class ApifyShopeeProvider implements IShopeeProvider {
     } catch {
       throw new ShopeeScraperError(
         ShopeeErrorCode.INVALID_RESPONSE,
-        "Failed to parse dataset items JSON"
+        "Failed to parse Apify dataset items JSON"
       );
     }
 
     if (!Array.isArray(rawItems)) {
       throw new ShopeeScraperError(
         ShopeeErrorCode.INVALID_RESPONSE,
-        "Dataset items response is not an array"
+        "Apify dataset items is not an array"
       );
     }
 
